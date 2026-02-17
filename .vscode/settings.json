@@ -1,0 +1,12 @@
+{
+  // Use the project's virtual environment interpreter to resolve imports (adjust path if your venv is elsewhere)
+  "python.defaultInterpreterPath": "C:\\Users\\begum.orhan\\OneDrive - MRC\\Masaüstü\\EDM\\.venv\\Scripts\\python.exe",
+
+  // Help Pylance find local modules (optional)
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/New folder (2)/Events Calender"
+  ],
+
+  // Keep Pylance as the language server
+  "python.languageServer": "Pylance"
+}

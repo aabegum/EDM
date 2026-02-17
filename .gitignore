@@ -1,0 +1,17 @@
+﻿.venv/
+.claude/
+__pycache__/
+.pytest_cache/
+*.pyc
+.ipynb_checkpoints/
+*.egg-info/
+*.txt
+*.md
+*.pdf
+.DS_Store
+data/input/
+New folder (2)/
+data/output/
+electricity_forecasting/data/
+electricity_forecasting/notebooks/data/
+electricity_forecasting/scripts/
