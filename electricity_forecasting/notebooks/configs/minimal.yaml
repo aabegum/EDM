@@ -1,0 +1,38 @@
+description: Minimal feature set for fast experimentation
+feature_config:
+  agricultural_features: false
+  calendar_features: true
+  cyclical_encoding: true
+  degree_days: true
+  description: Enhanced feature set
+  education_features: false
+  enforce_leakage_checks: true
+  exponential_moving: false
+  feature_interactions: true
+  fourier_features: true
+  freeze_percentiles: true
+  heat_index: true
+  historical_patterns: true
+  holiday_features: true
+  industrial_features: false
+  lag_hours:
+  - 24
+  - 48
+  - 168
+  rate_of_change: true
+  rolling_similar_days: true
+  rolling_stats:
+  - mean
+  - std
+  rolling_windows:
+  - 24
+  - 168
+  similar_day_stats: false
+  tourism_features: false
+  version: 2.0.0
+  volatility_features: true
+  weather_derived: true
+  weather_raw: true
+  wind_chill: false
+forecast_horizon: 24
+version: 2.0.0-minimal

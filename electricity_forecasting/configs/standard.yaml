@@ -1,0 +1,51 @@
+description: Standard feature set for 24h ahead forecasting
+feature_config:
+  agricultural_features: true
+  calendar_features: true
+  cyclical_encoding: true
+  degree_days: true
+  description: Enhanced feature set
+  education_features: true
+  enforce_leakage_checks: true
+  exponential_moving: true
+  feature_interactions: true
+  fourier_features: true
+  freeze_percentiles: true
+  heat_index: true
+  historical_patterns: true
+  holiday_features: true
+  industrial_features: true
+  lag_hours:
+  - 1
+  - 2
+  - 3
+  - 6
+  - 12
+  - 24
+  - 48
+  - 72
+  - 168
+  rate_of_change: true
+  rolling_similar_days: true
+  rolling_stats:
+  - mean
+  - std
+  - min
+  - max
+  - skew
+  rolling_windows:
+  - 6
+  - 12
+  - 24
+  - 48
+  - 168
+  similar_day_stats: true
+  tourism_features: true
+  version: 2.0.0
+  volatility_features: true
+  weather_analogues: true
+  weather_derived: true
+  weather_raw: true
+  wind_chill: false
+forecast_horizon: 24
+version: 2.0.0

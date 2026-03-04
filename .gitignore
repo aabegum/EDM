@@ -15,3 +15,5 @@ data/output/
 electricity_forecasting/data/
 electricity_forecasting/notebooks/data/
 electricity_forecasting/scripts/
+electricity_forecasting/reports/
+data/

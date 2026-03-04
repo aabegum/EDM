@@ -1,12 +1,7 @@
 # Auto-generated Python script from 01_data_exploration.ipynb# Generated on: 01_data_exploration.ipynb
-
-# %% [markdown]
 # # Electricity Demand Forecasting: Comprehensive Data Exploration# # **Objective**: Load, clean, analyze electricity demand and weather data with event feature integration.# # **Workflow**:# 1. **Setup**: Configure imports, paths, and parameters# 2. **Data Loading**: Load regional demand + multi-city weather + event features# 3. **Data Quality**: Verify completeness, consistency, and column mapping# 4. **Demand Analysis**: Baseline statistics, outliers, event stratification# 5. **Extreme Weather**: Temperature thresholds, elasticity, event interactions# 6. **Temporal Patterns**: Hourly, daily, seasonal demand cycles# 7. **Historical Similarity**: Find comparable past days for forecasting context# 8. **Weather Relationships**: Temperature-demand correlation, spatial variation# 9. **Summary**: Key findings and feature recommendations
 
-# %% [markdown]
 # ## ⚡ Data Units# # - **Demand**: MWh per hour (hourly energy consumption)#   - 1 MWh/hour ≈ 1 MW average power during that hour#   - All statistics, correlations, and comparisons use MWh# - **Temperature**: °C (Celsius)# - **Time**: Hourly resolution (one observation per hour)
-
-# %% [code cell]
 # ============================================================================
 # SECTION 1: IMPORTS & SETUP
 # ============================================================================
@@ -29,7 +24,6 @@ sns.set_palette("husl")
 
 print("✓ Imports loaded successfully")
 
-# %% [code cell]
 # ============================================================================
 # SECTION 2: CONFIGURATION
 # ============================================================================
@@ -49,7 +43,6 @@ print(f"Input Data Directory: {INPUT_DIR}")
 print(f"Figures Output: {FIGURES_DIR}")
 print(f"Cities: {', '.join(CITIES)}")
 
-# %% [code cell]
 # ============================================================================
 # SECTION 3: DATA LOADING FUNCTION
 # ============================================================================
@@ -138,7 +131,6 @@ if 'demand' not in base_df.columns:
     
 print(f"\n✓ Data loaded: {len(base_df):,} hourly observations")
 
-# %% [code cell]
 # ============================================================================
 # SECTION 4: DATA QUALITY CHECK
 # ============================================================================
@@ -183,7 +175,7 @@ print(f"From: {base_df['time'].min()}")
 print(f"To:   {base_df['time'].max()}")
 print(f"Duration: {(base_df['time'].max() - base_df['time'].min()).days} days")
 
-# %% [code cell]
+
 # ============================================================================
 # SECTION 5: DEMAND ANALYSIS - BASELINE STATISTICS
 # ============================================================================
@@ -235,7 +227,6 @@ print(f"\nIQR Method (1.5×IQR):")
 print(f"  High outliers: {len(outliers_iqr_high):>6,d} ({len(outliers_iqr_high)/len(base_df)*100:.2f}%)")
 print(f"  Low outliers:  {len(outliers_iqr_low):>6,d} ({len(outliers_iqr_low)/len(base_df)*100:.2f}%)")
 
-# %% [code cell]
 # ============================================================================
 # SECTION 5: VISUALIZATION - DEMAND DISTRIBUTION & OUTLIERS
 # ============================================================================
@@ -299,7 +290,7 @@ plt.savefig(FIGURES_DIR / '01_demand_distribution.png', dpi=300, bbox_inches='ti
 plt.show()
 print(f"\n✓ Figure saved: {FIGURES_DIR / '01_demand_distribution.png'}")
 
-# %% [code cell]
+
 # ============================================================================
 # SECTION 5C: COMPREHENSIVE OUTLIER DETECTION (Multiple Methods)
 # ============================================================================
@@ -386,7 +377,6 @@ print("-"*80)
 print(f"Total high-confidence outliers: {high_confidence.sum()}")
 print(f"Percentage of data: {high_confidence.sum()/len(demand_series)*100:.2f}%")
 
-# %% [code cell]
 # ============================================================================
 # SECTION 5C: VISUALIZATION - COMPREHENSIVE OUTLIER DETECTION
 # ============================================================================
@@ -522,7 +512,6 @@ plt.savefig(FIGURES_DIR / '05c_comprehensive_outlier_detection.png', dpi=300, bb
 plt.show()
 print(f"✓ Figure saved: {FIGURES_DIR / '05c_comprehensive_outlier_detection.png'}")
 
-# %% [code cell]
 # ============================================================================
 # SECTION 6: EXTREME WEATHER ANALYSIS
 # ============================================================================
@@ -579,7 +568,6 @@ if event_cols_available:
 else:
     print("⚠ No event columns available - run events_features.py first")
 
-# %% [code cell]
 # ============================================================================
 # SECTION 6: VISUALIZATION - EXTREME WEATHER & DEMAND
 # ============================================================================

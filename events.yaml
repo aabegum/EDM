@@ -1,0 +1,75 @@
+elections:
+- 2018-06-24
+- 2019-03-31
+- 2019-11-24
+- 2023-05-14
+lockdowns:
+- - '2020-03-11'
+  - '2020-06-01'
+- - '2020-11-15'
+  - '2021-05-01'
+school_start: 09-01
+school_end: 06-15
+semester_break_month: 2
+irrigation_months:
+- 4
+- 5
+- 6
+- 7
+- 8
+- 9
+- 10
+holiday_season_months:
+- 6
+- 7
+- 8
+tourism_months:
+- 5
+- 6
+- 7
+- 8
+- 9
+tourism_months_by_city:
+  aydin:
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  denizli:
+  - 6
+  - 7
+  - 8
+  mugla:
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+industrial_dates: []
+industrial_ranges: []
+industrial_default_rule: true
+industrial_exclude_tourism: true
+city_coords:
+  aydin:
+  - 37.8481
+  - 27.8454
+  denizli:
+  - 37.7833
+  - 29.0951
+  mugla:
+  - 37.2163
+  - 28.3635
+city_meta:
+  aydin:
+    is_coastal: false
+    distance_to_coast_km: 64.54
+  denizli:
+    is_coastal: false
+    distance_to_coast_km: 145.4
+  mugla:
+    is_coastal: true
+    distance_to_coast_km: 24.0
+auto_compute_distance_to_coast: true

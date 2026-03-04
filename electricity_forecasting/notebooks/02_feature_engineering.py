@@ -1,12 +1,8 @@
 # Auto-generated Python script from 02_feature_engineering.ipynb# Generated on: 02_feature_engineering.ipynb
 
-# %% [markdown]
 # # Feature Engineering and Advanced Analysis# ## Electricity Demand Forecasting# # This notebook builds upon the data exploration to create engineered features and perform advanced analysis.# Based on findings:# - Strong non-linear temperature response# - Multi-scale temporal patterns (hourly, daily, weekly)# - Event-dependent demand variations# - Weather synergies and interactions
 
-# %% [markdown]
 # ## 1. Setup and Data Loading
-
-# %% [code cell]
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,10 +28,7 @@ df = pd.concat([dfs[region] for region in regions], ignore_index=True)
 df = df.sort_values('time').reset_index(drop=True)
 print(f'\nCombined dataset: {df.shape[0]} rows, {df.shape[1]} columns')
 
-# %% [markdown]
-# ## 2. Data Preparation and Validation
-
-# %% [code cell]
+# ## 2. Data Preparation and Validation# 
 print('Missing values before imputation:')
 missing_cols = df.isnull().sum()
 print(missing_cols[missing_cols > 0])
@@ -44,33 +37,22 @@ df['temperature_lag_1h'] = df['temperature_lag_1h'].ffill()
 df['temperature_lag_24h'] = df['temperature_lag_24h'].ffill()
 df['distance_to_coast_km'] = df['distance_to_coast_km'].fillna(df.groupby('city')['distance_to_coast_km'].transform('mean'))
 
+# Note: aydin/denizli/mugla_temp_comfortable already exist in input files with no missing values
+
 print('\nMissing values after imputation:')
 print(df.isnull().sum().sum())
 
 print(f'\nData range: {df["time"].min()} to {df["time"].max()}')
 print(f'Demand statistics: Mean={df["demand"].mean():.2f}, Std={df["demand"].std():.2f}')
 
-# %% [markdown]
 # ## 3. Polynomial and Non-Linear Temperature Features
 
-# %% [code cell]
-print('Creating Static HDD/CDD Features...')
-# User-Specific Static Base Temperatures
-HDD_BASE = 18
-CDD_BASE = 24
+# Note: heating_degree_hours_static and cooling_degree_hours_static already exist in input files
+print('Skipping Section 3: HDD/CDD features already in input files')
+temp_features = []  # Empty list since features already exist
 
-df['heating_degree_hours_static'] = (HDD_BASE - df['temperature_2m']).clip(lower=0)
-df['cooling_degree_hours_static'] = (df['temperature_2m'] - CDD_BASE).clip(lower=0)
-
-print('✓ Created heating_degree_hours_static (Base 18)')
-print('✓ Created cooling_degree_hours_static (Base 24)')
-# Removed: temperature_squared, wind_chill, comfort_range (Excessive/Not requested)
-
-
-# %% [markdown]
 # ## 4. Cyclical Time Encoding
 
-# %% [code cell]
 if 'hour_sin' not in df.columns:
     df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
     df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
@@ -118,22 +100,21 @@ if 'hour_sin' not in df.columns:
 else:
     print('Cyclical features already exist. Skipping...')
 
-
-# %% [markdown]
 # ## 5. Lagged and Moving Average Features
 
-# %% [code cell]
 # Check if safe lags exist
 if 'demand_lag_48h' not in df.columns:
-    # 5. Lagged and Moving Average Features (24h Forecasting Horizon)\n
-    # Explicitly defined for 24-hour ahead forecasting (NO LEAKAGE)\n
-    # Safe features must be available at t-24 (or earlier)\n
+    # 5. Lagged and Moving Average Features (24h Forecasting Horizon)
+    # Explicitly defined for 24-hour ahead forecasting (NO LEAKAGE)
+    # Safe features must be available at t-24 (or earlier)
     FORECAST_HORIZON = 24
-    print(f'Forecasting Horizon: {FORECAST_HORIZON} hours')
+    SAFE_MIN_LAG = FORECAST_HORIZON + 1  # 25 hours
+    print(f'Forecasting Horizon: {FORECAST_HORIZON} hours (Safe Lag >= {SAFE_MIN_LAG}h)')
     
-    # 1. Demand Lags (Safe: t-48, t-72, t-168)\n
-    # We skip lag_24h based on user instruction for strict safety/latency handling\n
-    safe_lags = [48, 72, 168]
+    # 1. Demand Lags (Safe: t-48, t-72, t-168)
+    # We skip lag_24h based on user instruction for strict safety/latency handling
+    # lags 48h, 72h, 168h are safe for 24h horizon
+    safe_lags = [l for l in [48, 72, 168] if l >= SAFE_MIN_LAG]
     
     for region in df['city'].unique():
         region_mask = df['city'] == region
@@ -142,13 +123,18 @@ if 'demand_lag_48h' not in df.columns:
         for lag in safe_lags:
             feature_name = f'demand_lag_{lag}h'
             df[feature_name] = np.nan
-            df.loc[region_indices[lag:], feature_name] = df.loc[region_indices[:-lag], 'demand'].values
+            # Region-safe shift
+            df.loc[region_indices, feature_name] = df.loc[region_indices, 'demand'].shift(lag)
     
-    # 2. Rolling Stats (Shifted to prevent leakage)\n
+    # 2. Rolling Stats (Shifted to prevent leakage)
     # User requested rolling stats with shift(1) but for 24h horizon, we shift by 48h to consistent with safe lags.
     ma_windows = [24, 48, 168]
     shift_val = 48  # Consistent with 'lags 48h... are safe'
     
+    if shift_val < SAFE_MIN_LAG:
+         print(f"WARNING: shift_val {shift_val} is less than SAFE_MIN_LAG {SAFE_MIN_LAG}. Adjusting to {SAFE_MIN_LAG}.")
+         shift_val = SAFE_MIN_LAG
+
     for region in df['city'].unique():
         region_mask = df['city'] == region
         region_df = df[region_mask].copy()
@@ -168,23 +154,15 @@ else:
     print('Lag/MA features already exist. Skipping...')
 
 
-# %% [markdown]
 # ## 6. Temperature X Event Interaction Features
-
-# %% [code cell]
 print('Skipping Temperature Interactions (Excessive)...')
 # User requested clean/essential set. Interactions removed.
 interaction_features = []
 
-# %% [markdown]
 # ## 7. Weather Synergy Features
-
-# %% [code cell]
 print('Skipping Weather Synergy (Excessive)...')
 # User requested clean/essential set. Synergies removed.
 weather_features = []
-
-# %% [code cell]
 print('Skipping Similar Day Analysis (Excessive/Performance Heavy)...')
 # This section is computationally expensive and not in the essential list.
 historical_features = []
@@ -205,14 +183,16 @@ if 'is_peak_hour' not in df.columns:
     
     df['temp_heating_season'] = df['temperature_2m'] * df['is_heating_season']
     df['temp_heating_season_squared'] = (df['temperature_2m'] ** 2) * df['is_heating_season']
-    df['heating_degree_hours'] = (18 - df['temperature_2m']).clip(lower=0)
+    # Removed Duplicate: df['heating_degree_hours'] = (18 - df['temperature_2m']).clip(lower=0) 
+    # Use heating_degree_hours_static from Section 3 instead.
+    
     df['heating_demand_sensitivity'] = df['is_heating_season'] * (18 - df['temperature_2m']).clip(lower=0)
     df['cooling_demand_sensitivity'] = df['is_cooling_season'] * (df['temperature_2m'] - 24).clip(lower=0)
     df['summer_peak_potential'] = df['is_cooling_season'] * df['is_peak_hour'] * df['temperature_2m']
     df['winter_baseline'] = df['is_heating_season'] * (1 + (18 - df['temperature_2m']).clip(lower=0) / 10)
     
     season_features = ['is_heating_season', 'is_cooling_season', 'temp_heating_season',
-                       'temp_heating_season_squared', 'heating_degree_hours',
+                       'temp_heating_season_squared', # 'heating_degree_hours' removed
                        'heating_demand_sensitivity', 'cooling_demand_sensitivity',
                        'summer_peak_potential', 'winter_baseline']
     print(f'Created {len(season_features)} seasonal features')
@@ -244,16 +224,25 @@ for region in df['city'].unique():
 # Instead of using current demand minus historical mean (which includes future data),
 # use difference from same hour last week (clean temporal separation)
 
-# df['demand_lag_1h'] = df['demand'].shift(1) # REMOVED for 24h horizon leakage prevention
-# df['demand_lag_24h'] = df['demand'].shift(24) # REMOVED for 24h horizon leakage prevention
-df['demand_lag_168h'] = df['demand'].shift(168)
+# Region-safe calculations for deviations
+for region in df['city'].unique():
+    region_mask = df['city'] == region
+    # Use .loc to ensure alignment
+    r_idx = df[region_mask].index
+    
+    # Recalculate lags safely if not present (though they should be from Section 5)
+    # demand_lag_168h should already be in df from Section 5
+    
+    # Deviation features based on proper lags (no leakage)
+    # df['demand_deviation_safe'] = df['demand'].shift(48) - df['demand'].shift(168)
+    d48 = df.loc[region_mask, 'demand'].shift(48)
+    d168 = df.loc[region_mask, 'demand'].shift(168)
+    d336 = df.loc[region_mask, 'demand'].shift(336)
+    
+    df.loc[region_mask, 'demand_deviation_safe'] = d48 - d168
+    df.loc[region_mask, 'demand_deviation_dow'] = d168 - d336
 
-# Deviation features based on proper lags (no leakage)
-# df['demand_deviation_hourly'] = df['demand'].shift(1) - df['demand'].shift(2)  # 1h change # REMOVED unsafe deviation
-df['demand_deviation_safe'] = df['demand'].shift(48) - df['demand'].shift(168) # 48h vs Week ago
-df['demand_deviation_dow'] = df['demand'].shift(168) - df['demand'].shift(336)  # weekly change
-
-historical_features = [col for col in df.columns if 'same_hour' in col or 'lag' in col or 'demand_deviation' in col]
+historical_features = [col for col in df.columns if 'same_hour' in col or 'demand_deviation' in col]
 print(f'Created {len(historical_features)} historical similarity features (leakage-free - proper lag-based deviations)')
 
 # %% [markdown]
@@ -330,78 +319,12 @@ advanced_nonlinear = []
 # ## 14. Domain-Specific Features - Turkish Calendar & Industry Knowledge
 
 # %% [code cell]
-if 'is_morning_peak' not in df.columns:
-    print('Generating Essential Domain Features...')
-    domain_features = []
-    
-    # 1. Static Configuration Features (Population, Coast)
-    population_map = {'aydin': 1100000, 'denizli': 1050000, 'mugla': 1000000}
-    if 'population' not in df.columns:
-        df['population'] = df['city'].map(population_map)
-    
-    # 2. Day Phrases (Morning/Evening Peak, Night, Midday)
-    df['is_morning_peak'] = df['hour'].isin([8, 9, 10, 11]).astype(int)
-    df['is_midday'] = df['hour'].isin([12, 13, 14, 15, 16]).astype(int)
-    df['is_evening_peak'] = df['hour'].isin([17, 18, 19, 20, 21]).astype(int)
-    df['is_night'] = df['hour'].isin([22, 23, 0, 1, 2, 3, 4, 5, 6, 7]).astype(int)
-    
-    # 3. Holiday Proximity (Before/After/Bridge)
-    df['holiday_before'] = df['is_holiday'].shift(-1).fillna(0).astype(int)
-    df['holiday_after'] = df['is_holiday'].shift(1).fillna(0).astype(int)
-    df['is_bridge_day'] = ((df['holiday_before'] == 0) & (df['holiday_after'] == 0) & 
-                           (df['is_holiday'] == 0) & (df['day_of_week'].isin([0, 4]))).astype(int) # Monday/Friday check approx
-    
-    # 4. Religious Days Counters (Days To/Since Eid)
-    # Requires 'is_bayram' (generated in 14.1)
-    if 'is_bayram' in df.columns:
-        # Vectorized calculation for days to/since bayram
-        # Create a mask of bayram days
-        bayram_mask = df['is_bayram'] == 1
-        # We need a continuous time index for logical support if multiple cities
-        # Calculating globally since holidays are same for all cities.
-        
-        # Get global unique dates and their bayram status
-        dates_df = df[['time']].drop_duplicates().sort_values('time').copy()
-        dates_df['is_bayram'] = df.loc[dates_df.index, 'is_bayram']
-        
-        # Create an index of bayram dates
-        bayram_indices = dates_df.index[dates_df['is_bayram'] == 1].tolist()
-        
-        # Initialize
-        dates_df['days_since_eid'] = 999.0
-        dates_df['days_to_eid'] = 999.0
-        
-        # Simple loop over bayram occurrences (there are few)
-        for idx in bayram_indices:
-            bayram_time = dates_df.loc[idx, 'time']
-            # Days diff
-            diff_days = (dates_df['time'] - bayram_time).dt.total_seconds() / 86400
-            
-            # Update Since (positive diffs)
-            mask_since = (diff_days >= 0) & (diff_days < dates_df['days_since_eid'])
-            dates_df.loc[mask_since, 'days_since_eid'] = diff_days[mask_since]
-            
-            # Update To (negative diffs, take absolute)
-            mask_to = (diff_days <= 0) & (diff_days.abs() < dates_df['days_to_eid'])
-            dates_df.loc[mask_to, 'days_to_eid'] = diff_days[mask_to].abs()
-        
-        # Map back to main DF
-        time_to_since = dates_df.set_index('time')[['days_since_eid', 'days_to_eid']]
-        df = df.set_index('time').join(time_to_since, rsuffix='_calc').reset_index()
-        
-        # If columns existed, override or fill
-        if 'days_since_eid_calc' in df.columns:
-             df['days_since_eid'] = df['days_since_eid_calc']
-             df['days_to_eid'] = df['days_to_eid_calc']
-             df.drop(['days_since_eid_calc', 'days_to_eid_calc'], axis=1, inplace=True)
-    
-    domain_specific = ['population', 'is_morning_peak', 'is_midday', 'is_evening_peak', 'is_night',
-                       'holiday_before', 'holiday_after', 'is_bridge_day', 
-                       'days_since_eid', 'days_to_eid', 'distance_to_coast_km']
-    
-    print(f'Created {len(domain_specific)} essential domain features')
-else:
-    print('Domain features already exist. Skipping...')
+# Note: All domain-specific features already exist in input files:
+# - population, is_morning_peak, is_midday, is_evening_peak, is_night
+# - holiday_before, holiday_after, is_bridge_day
+# - days_since_eid, days_to_eid, distance_to_coast_km
+print('Skipping Section 14: Domain features already in input files')
+domain_specific = []  # Empty list since features already exist
 
 
 # %% [code cell]
@@ -409,71 +332,12 @@ else:
 # 14.1 SPECIAL CALENDAR & EVENTS (Safe/Hardcoded)
 # --------------------------------------------------------------------------------
 
-print('Generating Special Calendar Features (Elections, Lockdowns, Religious Events)...')
-
-def is_date_in_list(dt, date_list):
-    return 1 if dt.strftime('%Y-%m-%d') in date_list else 0
-
-# 1. Elections
-election_dates = ['2018-06-24', '2019-03-31', '2019-06-23', '2023-05-14', '2023-05-28', '2024-03-31']
-df['is_election_day'] = df['time'].apply(lambda x: is_date_in_list(x, election_dates))
-
-# 2. Lockdowns (Simplified for major periods)
-lockdown_mask = pd.Series(0, index=df.index)
-# Example: Full lockdown Spring 2020 weekends and holidays? (Simplified logic for brevity)
-# In a real scenario, we would map every date. Here we use a safe placeholder logic or config.
-# For strictly safe, we initialize to 0 unless we have the full list.
-df['is_lockdown'] = 0 # Placeholder: User marked as 'Config date ranges' - would require full CSV map.
-
-# 3. Religious Holidays (Bayrams)
-ramazan_dates = ['2018-06-15', '2018-06-16', '2018-06-17', '2019-06-04', '2019-06-05', '2019-06-06', '2020-05-24', '2020-05-25', '2020-05-26', '2021-05-13', '2021-05-14', '2021-05-15', '2022-05-02', '2022-05-03', '2022-05-04', '2023-04-21', '2023-04-22', '2023-04-23', '2024-04-10', '2024-04-11', '2024-04-12']
-kurban_dates = ['2018-08-21', '2018-08-22', '2018-08-23', '2018-08-24', '2019-08-11', '2019-08-12', '2019-08-13', '2019-08-14', '2020-07-31', '2020-08-01', '2020-08-02', '2020-08-03', '2021-07-20', '2021-07-21', '2021-07-22', '2021-07-23', '2022-07-09', '2022-07-10', '2022-07-11', '2022-07-12', '2023-06-28', '2023-06-29', '2023-06-30', '2023-07-01', '2024-06-16', '2024-06-17', '2024-06-18', '2024-06-19']
-
-df['is_ramazan_bayram'] = df['time'].apply(lambda x: is_date_in_list(x, ramazan_dates))
-df['is_kurban_bayram'] = df['time'].apply(lambda x: is_date_in_list(x, kurban_dates))
-df['is_bayram'] = df['is_ramazan_bayram'] | df['is_kurban_bayram']
-
-# 4. Eve (Arife) - Day before Bayram
-df['is_eve'] = df['is_bayram'].shift(-24).fillna(0).astype(int) # Approx 24h ahead tick is bayram -> today is eve? No, day shift.
-# Better: Shift day level
-df['date'] = df['time'].dt.date
-bayram_dates = df[df['is_bayram']==1]['date'].unique()
-eve_dates = [d - pd.Timedelta(days=1) for d in bayram_dates]
-df['is_eve'] = df['date'].isin(eve_dates).astype(int)
-
-# 5. Ramadan (Holy Month)
-# Simplified: 30 days before Ramazan Bayram
-df['is_ramadan'] = 0
-for end_date in ramazan_dates[::3]: # Take first day of each bayram group
-    end_dt = pd.to_datetime(end_date)
-    start_dt = end_dt - pd.Timedelta(days=30)
-    mask = (df['time'] >= start_dt) & (df['time'] < end_dt)
-    df.loc[mask, 'is_ramadan'] = 1
-
-# 6. Sahur & Iftar Estimation (Astral approximate)
-# If sunrise/sunset columns exist, use them. Else approx.
-if 'sunrise' not in df.columns:
-    # Create approx sunrise/sunset based on hour/month (Simple heuristic if data missing)
-    # Winter: Rise ~8, Set ~17. Summer: Rise ~5, Set ~20.
-    print('Warning: Sunrise/Sunset data missing. Using robust approximation for Iftar/Sahur.')
-    # Placeholder logic (Refine if libraries available)
-    df['is_sahur'] = 0
-    df['is_iftar'] = 0
-else:
-    # Sahur: ~1 hour before sunrise. Iftar: At sunset.
-    # Assuming sunrise/sunset are datetime or hour floats?
-    # If string 'HH:MM', convert.
-    pass
-
-# 7. New Year
-df['is_new_year'] = ((df['month'] == 1) & (df['day'] == 1)).astype(int)
-
-# 8. Geography
-if 'is_coastal' not in df.columns:
-    coastal_cities = ['izmir', 'antalya', 'mugla', 'aydin'] # Mugla/Aydin are coastal regions
-    df['is_coastal'] = df['city'].isin(coastal_cities).astype(int)
-
-print('Calendar & Event features generated.')
+# Note: All calendar features already exist in input files:
+# - is_election_day, is_ramadan, is_ramazan_bayram, is_kurban_bayram
+# - is_bayram, is_eve, is_new_year, is_coastal
+# - is_lockdown (already noted as existing)
+print('Skipping Section 14.1: Calendar features already in input files')
+special_calendar_features = []  # Empty list since features already exist
 
 
 # %% [markdown]
@@ -488,19 +352,6 @@ if 'advanced_nonlinear' not in dir():
 if 'domain_specific' not in dir():
     domain_specific = []
 if 'selected_features' not in dir():
-
-# ----------------------------------------------------------------
-# INTEGRATE NEW CALENDAR FEATURES
-# ----------------------------------------------------------------
-    special_calendar_features = [
-    'is_election_day', 'is_lockdown', 'is_ramadan', 'is_ramazan_bayram',
-    'is_kurban_bayram', 'is_bayram', 'is_eve', 'is_sahur', 'is_iftar',
-    'is_new_year', 'is_coastal'
-]
-if 'domain_specific' in dir():
-    for f in special_calendar_features:
-        if f in df.columns and f not in domain_specific:
-            domain_specific.append(f)
 # ----------------------------------------------------------------
 
     selected_features = engineered_features[:min(50, len(engineered_features))]
@@ -632,7 +483,7 @@ all_engineered_final = list(set([f for f in all_new if f in df.columns]))
 
 print(f'\nTotal engineered features: {len(all_engineered_final)}')
 
-output_path = '../data/engineered_features_essential.csv'
+output_path = '../data/processed/engineered_features_essential.csv'
 df.to_csv(output_path, index=False)
 print(f'\n✓ Saved dataset: {output_path}')
 print(f'  Shape: {df.shape[0]} rows × {df.shape[1]} columns')
