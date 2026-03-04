@@ -2,7 +2,51 @@ import pandas as pd
 import numpy as np
 import logging
 import os
+import yaml
+from pathlib import Path
 from dateutil.relativedelta import relativedelta
+
+# ---------------------------------------------------------------------------
+# Load feature-set configuration from configs/feature_sets.yaml.
+# The config sits two levels up from this file:  src/ -> project root -> configs/
+# Falls back to safe inline defaults so nothing breaks if the file is missing.
+# ---------------------------------------------------------------------------
+def _load_feature_config() -> dict:
+    config_path = Path(__file__).resolve().parent.parent / 'configs' / 'feature_sets.yaml'
+    try:
+        with open(config_path, 'r', encoding='utf-8') as f:
+            cfg = yaml.safe_load(f)
+        logging.getLogger(__name__).info(f'Loaded feature config from {config_path}')
+        return cfg
+    except FileNotFoundError:
+        logging.getLogger(__name__).warning(
+            f'feature_sets.yaml not found at {config_path}. Using built-in defaults.'
+        )
+        # Minimal hard-coded fallback (mirrors original code)
+        return {
+            'base_features': ['hour', 'day_of_week', 'month', 'is_holiday', 'is_weekend'],
+            'feature_keywords': {
+                'weather': ['temp', 'humid', 'solar', 'wind', 'cloud', 'radiation'],
+                'lags': ['lag'],
+                'cyclical': ['sin', 'cos'],
+            },
+            'select_clean': {
+                'bad_vif': ['humidex', 'apparent_temperature', 'demand_same_hour_avg_30d',
+                            'demand_lag_48h', 'demand_lag_168h', 'temperature_ma_24h'],
+            },
+            'select_sota': {
+                'bad_vif': ['humidex', 'apparent_temperature', 'demand_same_hour_avg_30d',
+                            'demand_lag_48h', 'demand_lag_168h', 'temperature_ma_24h',
+                            'dow_sin', 'week_fourier_cos_1', 'week_fourier_sin_1',
+                            'demand_lag_72h', 'dow_cos', 'doy_cos', 'hist_hour_mean'],
+                'top_shap': ['demand_deviation_1w', 'demand_roc_24h', 'doy_sin',
+                             'hour_sin', 'temp_change_24h', 'aydin_temp_comfortable', 'is_holiday'],
+                'max_lags': 25,
+                'max_weather': 15,
+            },
+        }
+
+_FEATURE_CFG = _load_feature_config()
 
 # A more robust DatasetCreator class tailored to the specific request
 
@@ -37,7 +81,7 @@ class DatasetFactory:
 
     def create_dataset(self, 
                        horizon='day_ahead',
-                       feature_set='standard',
+                       feature_set='select_standard',
                        split_strategy='chronological',
                        condition='none',
                        target_transform='raw'):
@@ -120,40 +164,118 @@ class DatasetFactory:
 
     def _select_features(self, df, variant):
         all_cols = df.columns
-        base = ['hour', 'day_of_week', 'month', 'is_holiday', 'is_weekend']
-        
-        # Helper lists
-        weather = [c for c in all_cols if any(x in c for x in ['temp', 'humid', 'solar', 'wind', 'cloud', 'radiation'])]
-        lags = [c for c in all_cols if 'lag' in c]
-        cyclical = [c for c in all_cols if 'sin' in c or 'cos' in c]
+        cfg = _FEATURE_CFG
 
-        if variant == 'minimal':
-            # Approx 25 important ones
+        # --- Feature groups built from config keywords ---
+        base     = cfg.get('base_features', ['hour', 'day_of_week', 'month', 'is_holiday', 'is_weekend'])
+        kw       = cfg.get('feature_keywords', {})
+        weather_kw  = kw.get('weather',  ['temp', 'humid', 'solar', 'wind', 'cloud', 'radiation'])
+        lag_kw      = kw.get('lags',     ['lag'])
+        cyclical_kw = kw.get('cyclical', ['sin', 'cos'])
+
+        weather  = [c for c in all_cols if any(x in c for x in weather_kw)]
+        lags     = [c for c in all_cols if any(x in c for x in lag_kw)]
+        cyclical = [c for c in all_cols if any(x in c for x in cyclical_kw)]
+
+        if variant == 'select_minimal':
             selected = base + ['temperature_2m'] + [c for c in lags if '24h' in c or '168h' in c][:5]
-        elif variant == 'standard':
-            # ~50 features
-            selected = base + weather[:5] + lags[:20] + cyclical
-        elif variant == 'extended':
-            # All available
-            selected = [c for c in all_cols if c not in ['time', 'demand', 'target'] and df[c].dtype in [np.int64, np.int32, np.float64, np.float32]]
-        elif variant == 'weather_heavy':
-            selected = weather + cyclical + ['is_holiday']
-        elif variant == 'demand_heavy':
-            selected = lags + cyclical + ['is_holiday']
-        else:
-            selected = base # Fallback
 
-        # Automatic Anti-Leakage: Filter unsafe lags
+        elif variant == 'select_standard':
+            selected = base + weather[:5] + lags[:20] + cyclical
+
+        elif variant == 'select_all':
+            selected = [c for c in all_cols if c not in ['time', 'demand', 'target']
+                        and df[c].dtype in [np.int64, np.int32, np.float64, np.float32]]
+
+        elif variant == 'select_weather':
+            selected = weather + cyclical + ['is_holiday']
+
+        elif variant == 'select_demand':
+            selected = lags + cyclical + ['is_holiday']
+
+        elif variant == 'select_clean':
+            # High-VIF exclusions loaded from configs/feature_sets.yaml  [select_clean]
+            bad_vif = cfg.get('select_clean', {}).get('bad_vif') or []
+            selected = [c for c in all_cols if c not in ['time', 'demand', 'target']
+                        and df[c].dtype in [np.int64, np.int32, np.float64, np.float32]]
+            selected = [c for c in selected if c not in bad_vif]
+
+        elif variant == 'select_sota':
+            # VIF exclusions and top-SHAP seeds loaded from configs/feature_sets.yaml  [select_sota]
+            sota_cfg    = cfg.get('select_sota', {})
+            bad_vif     = sota_cfg.get('bad_vif') or []
+            top_shap    = sota_cfg.get('top_shap') or []
+            max_lags    = sota_cfg.get('max_lags', 25)
+            max_weather = sota_cfg.get('max_weather', 15)
+
+            # Warn about any top_shap columns not present in the data
+            missing_shap = [c for c in top_shap if c not in all_cols]
+            if missing_shap:
+                logging.getLogger(__name__).warning(
+                    f'select_sota: {len(missing_shap)} top_shap column(s) not found in data '
+                    f'and will be skipped: {missing_shap}. '
+                    f'Update configs/feature_sets.yaml to fix this.'
+                )
+
+            selected = list(set(top_shap + lags[:max_lags] + weather[:max_weather]))
+            selected = [c for c in selected if c not in bad_vif and c in df.columns]
+
+        # ------------------------------------------------------------------
+        # CUSTOM EXPERIMENT SETS
+        # Any variant starting with 'custom_' is resolved dynamically from
+        # the custom_experiments section in configs/feature_sets.yaml.
+        # No Python edits needed — just add a new entry to the YAML.
+        #
+        # YAML schema per custom entry:
+        #   include:  [col1, col2, ...]   # explicit whitelist  (required)
+        #   exclude:  [col3, ...]          # optional blacklist on top of include
+        #   require:  [col4, ...]          # must-have cols added even if not in include
+        # ------------------------------------------------------------------
+        elif variant.startswith('custom_'):
+            custom_sets = cfg.get('custom_experiments', {})
+            exp_cfg     = custom_sets.get(variant)
+            log = logging.getLogger(__name__)
+
+            if exp_cfg is None:
+                log.warning(
+                    f"Custom variant '{variant}' not found in feature_sets.yaml "
+                    f"under 'custom_experiments'. "
+                    f"Available: {list(custom_sets.keys())}. Falling back to base."
+                )
+                selected = base
+            else:
+                include = exp_cfg.get('include') or []
+                exclude = exp_cfg.get('exclude') or []
+                require = exp_cfg.get('require') or []
+
+                # Start from explicit list, add required features, then remove excluded
+                selected = list(dict.fromkeys(include + require))  # preserve order, dedup
+                selected = [c for c in selected if c not in exclude]
+
+                # Validate: warn about any columns not present in the actual data
+                missing = [c for c in selected if c not in all_cols]
+                if missing:
+                    log.warning(
+                        f"custom variant '{variant}': {len(missing)} column(s) listed in "
+                        f"feature_sets.yaml but missing from data: {missing}. "
+                        f"They will be skipped."
+                    )
+                selected = [c for c in selected if c in all_cols]
+
+        else:
+            selected = base  # Fallback — unknown variant
+
+        # --- Automatic Anti-Leakage: drop lags shorter than horizon (assumed 24h -> cutoff 25h) ---
         safe_selected = []
         for col in selected:
             is_unsafe = False
-            # We assume day_ahead = 24h horizon -> safety means lags >= 25h
             try:
                 if 'lag_' in col:
                     lag_val = int(col.split('_lag_')[-1].replace('h', ''))
                     if lag_val < 25:
                         is_unsafe = True
-            except: pass
+            except Exception:
+                pass
             if not is_unsafe:
                 safe_selected.append(col)
 

@@ -41,7 +41,7 @@ df['time'] = pd.to_datetime(df['time'])
 factory = DatasetFactory(df)
 dataset_result = factory.create_dataset(
     horizon='day_ahead',
-    feature_set='extended', 
+    feature_set='select_all', 
     split_strategy='chronological'
 )
 
@@ -62,37 +62,34 @@ X_val = X_val.replace([np.inf, -np.inf], 0)
 
 print(f"\nTraining on {len(X_train)} samples, {len(feature_cols)} features...")
 
-# 2. Train a Fast Explainability Model (LightGBM)
-print("\n2. Training LightGBM Model for Interpreter...")
-lgb_train = lgb.Dataset(X_train, y_train)
-lgb_val = lgb.Dataset(X_val, y_val, reference=lgb_train)
+# 2. Train a Fast Explainability Model (XGBoost)
+print("\n2. Training XGBoost Model for Interpreter...")
+import xgboost as xgb
 
 params = {
-    'objective': 'regression',
-    'metric': 'mape',
-    'boosting_type': 'gbdt',
+    'objective': 'reg:squarederror',
+    'eval_metric': 'mape',
     'learning_rate': 0.1,
-    'num_leaves': 63,
-    'verbose': -1,
-    'random_state': 42
+    'max_depth': 6,
+    'random_state': 42,
+    'n_jobs': -1
 }
 
-model = lgb.train(
-    params,
-    lgb_train,
-    num_boost_round=500,
-    valid_sets=[lgb_train, lgb_val],
-    callbacks=[lgb.early_stopping(stopping_rounds=30, verbose=False)]
+model = xgb.XGBRegressor(**params, n_estimators=500)
+model.fit(
+    X_train, y_train,
+    eval_set=[(X_train, y_train), (X_val, y_val)],
+    verbose=False
 )
 
-print(f"Model trained! Best iteration: {model.best_iteration}")
+print(f"Model trained!")
 
 # 3. Native Feature Importance
 print("\n3. Calculating Native Tree Feature Importance...")
 os.makedirs('reports/figures', exist_ok=True)
 
 # Gain captures how much a feature improves accuracy 
-importance_gain = model.feature_importance(importance_type='gain')
+importance_gain = model.feature_importances_
 importance_df = pd.DataFrame({
     'Feature': feature_cols,
     'Importance_Gain': importance_gain
@@ -102,7 +99,7 @@ top_30_features = importance_df['Feature'].head(30).tolist()
 
 plt.figure(figsize=(12, 10))
 sns.barplot(x='Importance_Gain', y='Feature', data=importance_df.head(25), palette='viridis')
-plt.title('Top 25 Features by LightGBM Gain', fontsize=16)
+plt.title('Top 25 Features by XGBoost Gain', fontsize=16)
 plt.xlabel('Total Gain (Sum of squared errors reduction)', fontsize=12)
 plt.tight_layout()
 plt.savefig('reports/figures/01_native_feature_importance.png', dpi=300)

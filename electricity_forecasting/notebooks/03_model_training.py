@@ -97,7 +97,7 @@ print('-' * 80)
 factory = DatasetFactory(df)
 dataset_result = factory.create_dataset(
     horizon='day_ahead',
-    feature_set='extended', 
+    feature_set='select_all', 
     split_strategy='chronological'
 )
 
@@ -996,6 +996,7 @@ for idx, metric in enumerate(metrics_to_plot):
                 ha='center', va='bottom', fontsize=9)
 
 plt.tight_layout()
+plt.savefig('data/output/figures/model_comparison.png', dpi=300, bbox_inches='tight')
 plt.close('all')
 
 print('✓ Model comparison visualization complete')
@@ -1200,10 +1201,12 @@ if best_tree_model:
     plt.gca().invert_yaxis()
     plt.grid(alpha=0.3, axis='x')
     plt.tight_layout()
+    plt.savefig(f'data/output/figures/feature_importance_{best_tree_model.lower().replace(" ", "_")}.png', dpi=300, bbox_inches='tight')
     plt.close('all')
     
     # Save importance to CSV
-    importance_path = f'../data/output/feature_importance_{best_tree_model.lower().replace(" ", "_")}.csv'
+    os.makedirs('data/output', exist_ok=True)
+    importance_path = f'data/output/feature_importance_{best_tree_model.lower().replace(" ", "_")}.csv'
     importance_df.to_csv(importance_path, index=False)
     print(f'\n✓ Feature importance saved: {importance_path}')
 else:
@@ -1251,6 +1254,7 @@ axes[1, 1].set_title('Residuals Distribution - Validation Set', fontsize=12, fon
 axes[1, 1].grid(alpha=0.3, axis='y')
 
 plt.tight_layout()
+plt.savefig(f'data/output/figures/predictions_scatter.png', dpi=300, bbox_inches='tight')
 plt.close('all')
 
 print('✓ Prediction analysis visualization complete')
@@ -1289,6 +1293,7 @@ for target_month, target_month_name in target_months.items():
         plt.grid(alpha=0.3)
         plt.xticks(rotation=45)
         plt.tight_layout()
+        plt.savefig(f'data/output/figures/timeseries_{best_model_name.lower().replace(" ", "_")}_{target_month_name}_{city_to_plot}.png', dpi=300, bbox_inches='tight')
         plt.close('all')
         plots_generated += 1
 
@@ -1309,6 +1314,7 @@ if plots_generated == 0:
     plt.grid(alpha=0.3)
     plt.xticks(rotation=45)
     plt.tight_layout()
+    plt.savefig(f'data/output/figures/timeseries_{best_model_name.lower().replace(" ", "_")}_sample.png', dpi=300, bbox_inches='tight')
     plt.close('all')
 
 plt.xticks(rotation=45)
@@ -1394,6 +1400,7 @@ def plot_daily_performance(date_obj, title_prefix, color_scheme='green'):
     plt.grid(alpha=0.3)
     plt.xticks(rotation=45)
     plt.tight_layout()
+    plt.savefig(f'data/output/figures/daily_perf_{date_obj}_{city_to_show}.png', dpi=300, bbox_inches='tight')
     plt.close('all')
 
 # Visualize predictions for Best Days
@@ -1466,6 +1473,7 @@ for i, val in enumerate(regional_df['R²']):
     axes[1].text(i, val, f'{val:.4f}', ha='center', va='bottom', fontsize=10)
 
 plt.tight_layout()
+plt.savefig('data/output/figures/regional_performance.png', dpi=300, bbox_inches='tight')
 plt.close('all')
 
 print('\n✓ Regional performance analysis complete')
@@ -1479,12 +1487,13 @@ print('EXPORTING RESULTS')
 print('=' * 80)
 
 # Export model comparison
-comparison_path = '../data/output/model_comparison.csv'
+os.makedirs('data/output', exist_ok=True)
+comparison_path = 'data/output/model_comparison.csv'
 comparison_df.to_csv(comparison_path, index=False)
 print(f'✓ Model comparison saved: {comparison_path}')
 
 # Export regional performance
-regional_path = '../data/output/regional_performance.csv'
+regional_path = 'data/output/regional_performance.csv'
 regional_df.to_csv(regional_path, index=False)
 print(f'✓ Regional performance saved: {regional_path}')
 
@@ -1495,7 +1504,7 @@ predictions_df['error'] = predictions_df['demand_future'] - predictions_df['pred
 predictions_df['abs_error'] = np.abs(predictions_df['error'])
 predictions_df['pct_error'] = np.abs(predictions_df['error'] / (predictions_df['demand_future'] + 1e-10)) * 100
 
-predictions_path = '../data/output/test_predictions.csv'
+predictions_path = 'data/output/test_predictions.csv'
 predictions_df.to_csv(predictions_path, index=False)
 print(f'✓ Test predictions saved: {predictions_path}')
 
@@ -1530,7 +1539,7 @@ model_metadata = {
     'regional_performance': regional_df.to_dict('records')
 }
 
-metadata_path = '../data/output/model_training_metadata.json'
+metadata_path = 'data/output/model_training_metadata.json'
 with open(metadata_path, 'w') as f:
     json.dump(model_metadata, f, indent=2, default=str)
 print(f'✓ Model metadata saved: {metadata_path}')
@@ -1574,7 +1583,7 @@ comprehensive_results = comprehensive_evaluation(
 
 # Save comprehensive results to JSON
 import json
-results_path = f'../data/output/comprehensive_evaluation_{best_model_name.lower().replace(" ", "_")}.json'
+results_path = f'data/output/comprehensive_evaluation_{best_model_name.lower().replace(" ", "_")}.json'
 with open(results_path, 'w') as f:
     json.dump(comprehensive_results, f, indent=2, default=str)
 print(f'\n✓ Comprehensive evaluation results saved: {results_path}')
@@ -1656,6 +1665,7 @@ if special_periods:
         axes[1, 1].text(i, mape, f'{mape:.2f}%', ha='center', va='bottom', fontsize=9)
 
 plt.tight_layout()
+plt.savefig(f'data/output/figures/comprehensive_eval.png', dpi=300, bbox_inches='tight')
 plt.close('all')
 
 print('✓ Comprehensive evaluation visualization complete')

@@ -1,0 +1,268 @@
+# ============================================================
+# feature_sets.yaml
+# Defines feature selection rules for DatasetFactory variants.
+# Update this file after each model explainability run instead
+# of editing dataset_creator.py directly.
+# Last updated: 2026-03-04  (based on Model_Explainability_Report.md)
+# ============================================================
+
+# --- Base calendar features expected in every dataset ---
+base_features:
+  - hour
+  - day_of_week
+  - month
+  - is_holiday
+  - is_weekend
+
+# --- Keyword substrings used to auto-detect feature groups ---
+feature_keywords:
+  weather:
+    - temp
+    - humid
+    - solar
+    - wind
+    - cloud
+    - radiation
+  lags:
+    - lag
+  cyclical:
+    - sin
+    - cos
+
+# ============================================================
+# select_clean variant
+# Removes the highest-VIF columns identified in the
+# Model Explainability Report (VIF > 10, Critical level).
+# Source: reports/Model_Explainability_Report.md  §3
+# ============================================================
+select_clean:
+  bad_vif:
+   # - humidex                    # VIF: 163.55
+   # - apparent_temperature       # VIF: 151.42
+   # - demand_same_hour_avg_30d   # VIF:  43.55
+   # - demand_lag_48h             # VIF:  27.99
+   # - demand_lag_168h            # VIF:  25.89
+   # - temperature_ma_24h         # VIF:  20.95
+
+# ============================================================
+# select_sota variant
+# Keeps only top SHAP signals and drops ALL VIF > 10.
+# Source: reports/Model_Explainability_Report.md  §2 & §3
+# ============================================================
+select_sota:
+  bad_vif:
+   # - humidex                    # VIF: 163.55
+   # - apparent_temperature       # VIF: 151.42
+   # - demand_same_hour_avg_30d   # VIF:  43.55
+   # - demand_lag_48h             # VIF:  27.99
+   # - demand_lag_168h            # VIF:  25.89
+   # - temperature_ma_24h         # VIF:  20.95
+   # - dow_sin                    # VIF:  17.24
+   # - week_fourier_cos_1         # VIF:  17.23
+   # - week_fourier_sin_1         # VIF:  16.11
+   # - demand_lag_72h             # VIF:  15.96
+   # - dow_cos                    # VIF:  15.66
+   # - doy_cos                    # VIF:  14.39
+   # - hist_hour_mean             # VIF:  11.75
+
+  # Top features by mean absolute SHAP impact (§2 of Explainability Report).
+  # NOTE: column names must match actual data — verify after each feature
+  # engineering run. 'temp_comfortable_warm' and 'temp_roc_24h' were renamed;
+  # updated to their current names in the engineered feature files.
+  top_shap:
+   # - demand_deviation_1w        # SHAP: 31.83 MWh
+   # - demand_roc_24h             # SHAP:  8.87 MWh
+   # - doy_sin                    # proxy for seasonal position
+   # - hour_sin                   # proxy for time-of-day
+   # - temp_change_24h            # was: temp_roc_24h (renamed in feature eng.)
+   # - aydin_temp_comfortable     # was: temp_comfortable_warm (now city-prefixed)
+   # - is_holiday                 # SHAP: confirmed signal
+
+  # Max number of lag columns and weather columns to include
+  # on top of the forced top_shap list
+  max_lags: 25
+  max_weather: 15
+
+# ============================================================
+# CUSTOM EXPERIMENT SETS  —  Edit ONLY this section to iterate
+# toward MAPE < 2%. No Python code changes are ever needed.
+#
+# How to use:
+#   1. Add a new entry under custom_experiments  (e.g. custom_v3)
+#   2. Set feature_set: 'custom_v3' in run_experiments.py
+#   3. Run and read the MAPE from the experiment results table.
+#
+# Schema for each entry:
+#   include:  [...]   Explicit feature whitelist (order preserved)
+#   exclude:  [...]   Drop these from include  (optional, for quick A/B)
+#   require:  [...]   Always forced in, even if not in include (optional)
+#
+# Tip: comment/uncomment single lines to do surgical feature ablation.
+# ============================================================
+custom_experiments:
+
+  # ----------------------------------------------------------
+  # custom_v1 — Baseline surgical set
+  # Starting point: top SHAP signals only, no VIF redundancy.
+  # Target MAPE: ~3-4%  (benchmark before optimisation)
+  # ----------------------------------------------------------
+  custom_v1:
+    include:
+      # --- Core temporal anchors ---
+      - hour_sin
+      - hour_cos
+      - doy_sin
+      - doy_cos
+      - dow_sin
+      - is_holiday
+      - is_weekend
+      # --- Strongest lag signals (from SHAP report) ---
+      - demand_lag_48h
+      - demand_lag_72h
+      - demand_lag_168h
+      - demand_same_hour_avg_30d
+      - demand_deviation_1w
+      - demand_roc_24h
+      # --- Key weather ---
+      - temperature_2m
+      - temp_change_24h
+
+  # ----------------------------------------------------------
+  # custom_v2 — Expand to rolling stats + Fourier
+  # Adds rolling demand context and week seasonality.
+  # Target MAPE: ~2.5-3%
+  # ----------------------------------------------------------
+  custom_v2:
+    include:
+      # --- Temporal ---
+      - hour_sin
+      - hour_cos
+      - doy_sin
+      - doy_cos
+      - is_holiday
+      - is_weekend
+      - is_business_day
+      - week_fourier_sin_1
+      - week_fourier_cos_1
+      # --- Demand history ---
+      - demand_lag_48h
+      - demand_lag_168h
+      - demand_same_hour_avg_30d
+      - demand_deviation_1w
+      - demand_roc_24h
+      - demand_mean_24h
+      - demand_std_24h
+      - demand_mean_168h
+      - hist_hour_mean
+      - demand_same_hour_1w
+      - demand_same_hour_2w
+      # --- Weather ---
+      - temperature_2m
+      - temp_change_24h
+      - hdd
+      - cdd
+      - relative_humidity_2m
+      - shortwave_radiation
+
+  # ----------------------------------------------------------
+  # custom_v3 — Add regional & interaction features
+  # Hypothesis: city - specific temp comfort + interactions
+  # drive the last mile toward MAPE < 2%.
+  # Target MAPE: ~2-2.5%
+  # ----------------------------------------------------------
+  custom_v3:
+    include:
+      # --- Temporal ---
+      - hour_sin
+      - hour_cos
+      - doy_sin
+      - doy_cos
+      - is_holiday
+      - is_weekend
+      - is_business_day
+      - week_fourier_sin_1
+      - week_fourier_cos_1
+      # --- Demand history ---
+      - demand_lag_48h
+      - demand_lag_168h
+      - demand_same_hour_avg_30d
+      - demand_deviation_1w
+      - demand_roc_24h
+      - demand_mean_24h
+      - demand_std_24h
+      - demand_mean_168h
+      - demand_ema_24h
+      - demand_ema_168h
+      - demand_same_hour_1w
+      - demand_same_hour_2w
+      - demand_same_hour_3w
+      - hist_hour_mean
+      - hist_dow_mean
+      - demand_same_dow_avg_4w
+      # --- Weather & derived ---
+      - temperature_2m
+      - temp_change_24h
+      - temp_squared
+      - hdd
+      - cdd
+      - relative_humidity_2m
+      - shortwave_radiation
+      - daily_insolation_wh_m2
+      - effective_temp
+      # --- Interaction features ---
+      - temp_x_hour_sin
+      - temp_x_weekend
+      - temp_x_is_business_day
+      - hdd_x_hour_sin
+      - cdd_x_hour_sin
+    exclude: []   # Nothing excluded here — comment a line above to ablate
+
+  # ----------------------------------------------------------
+  # custom_v4 — Ablation test: v3 minus interaction features
+  # Tests whether interaction terms actually help (<-> v3).
+  # Run v3 and v4 back-to-back to isolate their effect.
+  # ----------------------------------------------------------
+  custom_v4:
+    include:
+      # Copy of v3 include list WITHOUT interaction block
+      - hour_sin
+      - hour_cos
+      - doy_sin
+      - doy_cos
+      - is_holiday
+      - is_weekend
+      - is_business_day
+      - week_fourier_sin_1
+      - week_fourier_cos_1
+      - demand_lag_48h
+      - demand_lag_168h
+      - demand_same_hour_avg_30d
+      - demand_deviation_1w
+      - demand_roc_24h
+      - demand_mean_24h
+      - demand_std_24h
+      - demand_mean_168h
+      - demand_ema_24h
+      - demand_ema_168h
+      - demand_same_hour_1w
+      - demand_same_hour_2w
+      - demand_same_hour_3w
+      - hist_hour_mean
+      - hist_dow_mean
+      - demand_same_dow_avg_4w
+      - temperature_2m
+      - temp_change_24h
+      - temp_squared
+      - hdd
+      - cdd
+      - relative_humidity_2m
+      - shortwave_radiation
+      - daily_insolation_wh_m2
+      - effective_temp
+    # Interaction columns explicitly excluded for clean ablation
+    exclude:
+      - temp_x_hour_sin
+      - temp_x_weekend
+      - temp_x_is_business_day
+      - hdd_x_hour_sin
+      - cdd_x_hour_sin
